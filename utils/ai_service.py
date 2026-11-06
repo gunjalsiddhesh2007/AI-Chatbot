@@ -1,4 +1,5 @@
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -27,9 +28,9 @@ def generate_response(message, history=None):
                 "You are a helpful, clear, and conversational assistant. Format every answer "
                 "so it is easy to read on a screen. Avoid putting the whole answer in one "
                 "long paragraph; use short paragraphs and blank lines between separate ideas. "
-                "Use numbered lists for steps and hyphen bullets for related items, with each "
-                "item on its own line. Use clear headings when an answer has multiple sections. "
-                "Do not use asterisks for bullets, emphasis, or decoration. Keep answers focused "
+                "Use numbered lists for steps when useful, with each step on its own line. "
+                "Use plain text only. Do not use Markdown, asterisks, hyphens as bullet marks, "
+                "or separator lines. Use clear headings written as plain text. Keep answers focused "
                 "and use simple language. Give brief direct answers to simple questions; organize "
                 "complex explanations into readable sections. Preserve useful line breaks and "
                 "never join headings, paragraphs, or list items into one line. Write in "
@@ -50,6 +51,9 @@ def generate_response(message, history=None):
                 response = client.chat.completions.create(model=model, messages=messages)
                 answer = (response.choices[0].message.content or "").strip()
                 if answer:
+                    answer = re.sub(r"(?m)^[ \t]*(?:-{3,}|\*{3,}|_{3,})[ \t]*$", "", answer)
+                    answer = re.sub(r"(?m)^[ \t]*[-*+][ \t]+", "", answer)
+                    answer = answer.replace("*", "")
                     return answer
                 last_error = AIServiceError("Groq returned an empty response.")
             except Exception as exc:
