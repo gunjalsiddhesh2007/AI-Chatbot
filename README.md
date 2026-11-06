@@ -28,3 +28,5 @@ For multiple instances, configure `RATELIMIT_STORAGE_URI` with a shared Redis UR
 - `GET /health` — JSON health status.
 
 Chat requests are capped at 16 KB; message text at 4,000 characters; context at 20 turns. The per-IP chat limit defaults to 10 requests per hour.
+
+LINK: https://ai-chatbot-ezch.onrender.com/
