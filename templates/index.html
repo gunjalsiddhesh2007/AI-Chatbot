@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff">
+  <title>AI ChatBot</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="AI ChatBot home"><span class="brand-mark" aria-hidden="true">✦</span><span>AI ChatBot</span></a>
+      <div class="status"><span class="status-dot"></span><span>Ready to help</span></div>
+    </header>
+    <main class="chat-layout">
+      <section class="conversation" aria-label="Chat conversation" aria-live="polite">
+        <div id="messages" class="messages">
+          <div id="welcome" class="welcome">
+            <div class="welcome-icon" aria-hidden="true">✦</div>
+            <h1>Hello! How can I help you today?</h1>
+            <p>Ask anything and get intelligent answers powered by Gemini AI.</p>
+          </div>
+        </div>
+      </section>
+      <div class="composer-wrap">
+        <form id="chat-form" class="composer">
+          <label class="sr-only" for="message-input">Your message</label>
+          <textarea id="message-input" rows="1" maxlength="4000" placeholder="Message AI ChatBot…" required></textarea>
+          <button id="send-button" class="send-button" type="submit" aria-label="Send message" title="Send message"><span aria-hidden="true">↑</span></button>
+        </form>
+        <div class="composer-meta"><button id="clear-button" class="clear-button" type="button">Clear conversation</button><span>Enter to send · Shift + Enter for a new line</span></div>
+        <p class="disclaimer">AI can make mistakes. Check important information.</p>
+      </div>
+    </main>
+  </div>
+  <script src="{{ url_for('static', filename='js/script.js') }}" defer></script>
+</body>
+</html>
