@@ -25,7 +25,7 @@ A small Flask chatbot with Gemini responses, server-side SQLite conversation his
 | `RATELIMIT_STORAGE_URI` | `memory://` | Flask-Limiter storage; use shared Redis for multiple instances |
 | `CONTEXT_WINDOW` | `20` | Maximum previous messages included in model context |
 | `CONTEXT_MAX_CHARS` | `24000` | Approximate input-size guard for previous messages |
-| `GROQ_API_KEY`, `GROQ_API_KEY_2` | — | Optional legacy fallback keys |
+| `GROQ_API_KEY` | — | Optional legacy fallback keys |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Legacy fallback model |
 
 Copy `.env.example` for local development. `.env` and SQLite database files are ignored by Git. Do not commit credentials.
