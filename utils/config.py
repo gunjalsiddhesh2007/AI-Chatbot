@@ -30,7 +30,6 @@ def flask_settings():
 
     return {
         "SECRET_KEY": secret,
-        "DATABASE_URL": os.getenv("DATABASE_URL", "").strip(),
         "DATABASE_PATH": os.getenv("DATABASE_PATH", "chatbot.db"),
         "MAX_CONTENT_LENGTH": 16 * 1024,
         "RATE_LIMIT": os.getenv("RATE_LIMIT", "10 per hour"),

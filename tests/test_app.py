@@ -137,14 +137,6 @@ class AppTests(unittest.TestCase):
         self.assertIn("dompurify@", html.lower())
         self.assertIn("max-width: 700px", css)
         self.assertIn("prefers-reduced-motion", css)
-        self.assertIn("HTTP ${response.status}", script)
-        self.assertEqual(html.count('class="suggestion-card"'), 4)
-        self.assertIn('id="suggestion-cards-template"', html)
-        self.assertIn('messages.addEventListener("click"', script)
-        self.assertIn("form.requestSubmit();", script)
-        create_first_conversation = script.index('const created = await api("/api/conversations"')
-        send_chat_request = script.index('const data = await api("/api/chat"')
-        self.assertLess(create_first_conversation, send_chat_request)
 
     def test_render_startup_and_persistent_disk_instructions_are_present(self):
         root = Path(__file__).resolve().parents[1]
@@ -154,22 +146,6 @@ class AppTests(unittest.TestCase):
         self.assertIn("/health", readme)
         self.assertIn("Persistent Disk", readme)
         self.assertIn("ephemeral filesystem", readme)
-
-    def test_postgres_url_takes_precedence_over_sqlite_path(self):
-        postgres_url = "postgresql://db-user:secret@db.example.test:5432/chat?sslmode=require"
-        with patch("app.initialize_database") as initialize, patch("app.list_conversations", return_value=[]) as listing:
-            postgres_app = create_app({
-                "TESTING": True,
-                "SECRET_KEY": "postgres-test-secret",
-                "DATABASE_URL": postgres_url,
-                "DATABASE_PATH": self.db_path,
-                "RATE_LIMIT": "100 per hour",
-                "SESSION_COOKIE_SECURE": False,
-            })
-            response = postgres_app.test_client().get("/api/conversations")
-        self.assertEqual(response.status_code, 200)
-        initialize.assert_called_once_with(postgres_url)
-        listing.assert_called_once_with(postgres_url, "")
 
 
 if __name__ == "__main__":

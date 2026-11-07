@@ -52,8 +52,7 @@ def create_app(config_overrides=None):
     if config_overrides:
         app.config.update(config_overrides)
 
-    database_target = app.config["DATABASE_URL"] or app.config["DATABASE_PATH"]
-    initialize_database(database_target)
+    initialize_database(app.config["DATABASE_PATH"])
     limiter = Limiter(
         get_remote_address,
         app=app,
@@ -90,7 +89,7 @@ def create_app(config_overrides=None):
     @app.get("/health")
     def health():
         try:
-            check_database(database_target)
+            check_database(app.config["DATABASE_PATH"])
             return _json_response({"status": "ok"})
         except DatabaseError:
             return _json_response({"status": "unavailable"}, error="Service temporarily unavailable.", status=503)
@@ -99,7 +98,7 @@ def create_app(config_overrides=None):
     def conversations():
         search = request.args.get("q", "").strip()[:120]
         try:
-            items = list_conversations(database_target, search)
+            items = list_conversations(app.config["DATABASE_PATH"], search)
             return _json_response({"conversations": items})
         except DatabaseError:
             app.logger.exception("Could not list conversations")
@@ -109,7 +108,7 @@ def create_app(config_overrides=None):
     @limiter.limit(app.config["RATE_LIMIT"])
     def new_conversation():
         try:
-            conversation = create_conversation(database_target)
+            conversation = create_conversation(app.config["DATABASE_PATH"])
             return _json_response({"conversation": conversation}, status=201)
         except DatabaseError:
             app.logger.exception("Could not create a conversation")
@@ -122,7 +121,7 @@ def create_app(config_overrides=None):
         except ValueError:
             return _json_response(error="Conversation not found.", status=404)
         try:
-            conversation = get_conversation(parsed_id, database_target)
+            conversation = get_conversation(parsed_id, app.config["DATABASE_PATH"])
             if conversation is None:
                 return _json_response(error="Conversation not found.", status=404)
             return _json_response({"conversation": conversation})
@@ -138,7 +137,7 @@ def create_app(config_overrides=None):
         except ValueError:
             return _json_response(error="Conversation not found.", status=404)
         try:
-            deleted = delete_conversation(parsed_id, database_target)
+            deleted = delete_conversation(parsed_id, app.config["DATABASE_PATH"])
             if not deleted:
                 return _json_response(error="Conversation not found.", status=404)
             return _json_response({"conversation_id": parsed_id})
@@ -163,14 +162,14 @@ def create_app(config_overrides=None):
             provided_id = payload.get("conversation_id")
             if provided_id is None:
                 conversation, user_message_id = create_conversation_with_first_message(
-                    message, database_target
+                    message, app.config["DATABASE_PATH"]
                 )
                 parsed_id = conversation["id"]
             else:
                 parsed_id = _conversation_id(provided_id)
-                if get_conversation(parsed_id, database_target) is None:
+                if get_conversation(parsed_id, app.config["DATABASE_PATH"]) is None:
                     return _json_response(error="Conversation not found.", status=404)
-                user_message = save_message(parsed_id, "user", message, database_target)
+                user_message = save_message(parsed_id, "user", message, app.config["DATABASE_PATH"])
                 user_message_id = user_message["id"]
 
             context = get_context_messages(
@@ -178,7 +177,7 @@ def create_app(config_overrides=None):
                 before_message_id=user_message_id,
                 window=app.config["CONTEXT_WINDOW"],
                 max_chars=app.config["CONTEXT_MAX_CHARS"],
-                path=database_target,
+                path=app.config["DATABASE_PATH"],
             )
         except ValueError:
             return _json_response(error="Conversation ID is invalid.", status=400)
@@ -207,8 +206,8 @@ def create_app(config_overrides=None):
             )
 
         try:
-            save_message(parsed_id, "assistant", answer, database_target)
-            conversation = get_conversation(parsed_id, database_target)
+            save_message(parsed_id, "assistant", answer, app.config["DATABASE_PATH"])
+            conversation = get_conversation(parsed_id, app.config["DATABASE_PATH"])
             result = {
                 "conversation_id": parsed_id,
                 "response": answer,

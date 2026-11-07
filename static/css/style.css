@@ -75,13 +75,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .welcome-icon { width: 52px; height: 52px; margin: 0 auto 21px; border-radius: 17px; box-shadow: 0 8px 20px #0000ff25; font-size: 27px; }
 .welcome h2 { margin: 0 0 10px; color: #1c2028; font-size: clamp(23px, 3vw, 29px); letter-spacing: -.8px; }
 .welcome p { margin: 0; color: #747b89; font-size: 14px; line-height: 1.6; }
-.suggestions { width: min(100%, 620px); margin: 22px auto 0; text-align: left; }
-.suggestions h3 { margin: 0 0 11px; color: #777f8c; font-size: 11px; font-weight: 650; letter-spacing: .07em; text-align: center; text-transform: uppercase; }
-.suggestion-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.suggestion-card { display: flex; min-height: 82px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 6px; padding: 11px 13px; border: 1px solid var(--border); border-radius: 12px; color: #252a33; background: #fff; text-align: left; cursor: pointer; transition: transform .16s ease, border-color .16s ease, background .16s ease, box-shadow .16s ease; }
-.suggestion-card:hover { transform: translateY(-2px); border-color: #b9b9ff; background: #fbfbff; box-shadow: 0 5px 15px #0000ff0c; }
-.suggestion-card strong { font-size: 12px; font-weight: 650; }
-.suggestion-card span { color: #777f8c; font-size: 11px; line-height: 1.45; }
 .message { display: flex; align-items: flex-start; animation: message-in .2s ease both; }
 .message.user { justify-content: flex-end; }
 .bubble { max-width: min(80%, 700px); overflow-wrap: anywhere; border-radius: 17px; font-size: 14px; line-height: 1.68; }
@@ -156,11 +149,6 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .welcome { padding: 36px 4px 48px; }
   .welcome-icon { width: 47px; height: 47px; margin-bottom: 17px; border-radius: 15px; font-size: 24px; }
   .welcome p { font-size: 13px; }
-  .suggestions { margin-top: 19px; }
-  .suggestion-grid { gap: 8px; }
-  .suggestion-card { min-height: 82px; padding: 10px; }
-  .suggestion-card strong { font-size: 11px; }
-  .suggestion-card span { font-size: 10px; }
   .bubble { max-width: 91%; font-size: 13px; }
   .assistant .bubble { max-width: 100%; }
   .composer-wrap { width: calc(100% - 28px); padding: 9px 0 max(10px, env(safe-area-inset-bottom)); }
