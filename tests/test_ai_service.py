@@ -39,6 +39,44 @@ class AIServiceTests(unittest.TestCase):
         self.assertEqual(response, "Legacy reply")
         generate.assert_called_once_with("legacy-key", "hello", [])
 
+    @patch("utils.ai_service._groq_response", return_value="Groq backup reply")
+    @patch("utils.ai_service._gemini_response", side_effect=AIServiceError("Gemini is unavailable."))
+    def test_groq_is_tried_when_configured_gemini_fails(self, gemini, groq):
+        context = [{"role": "user", "content": "earlier question"}]
+        with patch.dict(os.environ, {
+            "GEMINI_API_KEY": "gemini-key",
+            "GROQ_API_KEY": "groq-key",
+            "GROQ_API_KEY_2": "groq-backup-key",
+        }):
+            response = generate_response("latest question", context)
+        self.assertEqual(response, "Groq backup reply")
+        gemini.assert_called_once_with("gemini-key", "latest question", context)
+        groq.assert_called_once_with("groq-key", "latest question", context)
+
+    @patch("utils.ai_service._groq_response", side_effect=[RuntimeError("primary unavailable"), "backup reply"])
+    @patch("utils.ai_service._gemini_response", side_effect=RuntimeError("Gemini unavailable"))
+    def test_groq_backup_key_is_tried_if_primary_groq_key_fails(self, gemini, groq):
+        with patch.dict(os.environ, {
+            "GEMINI_API_KEY": "gemini-key",
+            "GROQ_API_KEY": "groq-key",
+            "GROQ_API_KEY_2": "groq-backup-key",
+        }):
+            response = generate_response("hello", [])
+        self.assertEqual(response, "backup reply")
+        self.assertEqual([call.args[0] for call in groq.call_args_list], ["groq-key", "groq-backup-key"])
+
+    @patch("utils.ai_service._groq_response", side_effect=RuntimeError("private provider details"))
+    @patch("utils.ai_service._gemini_response", side_effect=RuntimeError("private Gemini details"))
+    def test_double_provider_failure_is_safe(self, gemini, groq):
+        with patch.dict(os.environ, {
+            "GEMINI_API_KEY": "gemini-key",
+            "GROQ_API_KEY": "groq-key",
+        }):
+            with self.assertRaises(AIServiceError) as error:
+                generate_response("hello", [])
+        self.assertIn("Groq fallback also failed", str(error.exception))
+        self.assertNotIn("private", str(error.exception))
+
     def test_missing_keys_return_safe_configuration_error(self):
         with patch.dict(os.environ, {"GEMINI_API_KEY": "", "GROQ_API_KEY": "", "GROQ_API_KEY_2": ""}):
             with self.assertRaises(AIServiceError) as error:

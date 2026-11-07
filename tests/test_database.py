@@ -1,8 +1,12 @@
 import sqlite3
+import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
+import utils.database as database
 from utils.database import (
     ConversationNotFound,
     create_conversation,
@@ -82,6 +86,53 @@ class DatabaseTests(unittest.TestCase):
             save_message(99999, "user", "No conversation", self.path)
         with self.assertRaises(ConversationNotFound):
             get_context_messages(99999, before_message_id=99999, path=self.path)
+
+    def test_postgres_url_selects_psycopg_and_translates_parameters(self):
+        fake_connection = Mock()
+        fake_driver = types.ModuleType("psycopg")
+        fake_driver.__path__ = []
+        fake_driver.connect = Mock(return_value=fake_connection)
+
+        class FakeDriverError(Exception):
+            pass
+
+        fake_driver.Error = FakeDriverError
+        fake_rows = types.ModuleType("psycopg.rows")
+        fake_rows.dict_row = object()
+        url = "postgres://user:secret@db.example.test:5432/chat"
+
+        with patch.dict(sys.modules, {"psycopg": fake_driver, "psycopg.rows": fake_rows}):
+            connection = database._connect(url)
+            connection.execute("SELECT id FROM conversations WHERE id = ?", (7,))
+
+        self.assertTrue(connection.is_postgres)
+        fake_driver.connect.assert_called_once_with(
+            "postgresql://user:secret@db.example.test:5432/chat",
+            row_factory=fake_rows.dict_row,
+            connect_timeout=10,
+        )
+        fake_connection.execute.assert_called_once_with("SELECT id FROM conversations WHERE id = %s", (7,))
+
+    def test_postgres_initialization_executes_schema_and_commits(self):
+        fake_connection = Mock()
+        fake_driver = types.ModuleType("psycopg")
+        fake_driver.__path__ = []
+        fake_driver.connect = Mock(return_value=fake_connection)
+
+        class FakeDriverError(Exception):
+            pass
+
+        fake_driver.Error = FakeDriverError
+        fake_rows = types.ModuleType("psycopg.rows")
+        fake_rows.dict_row = object()
+
+        with patch.dict(sys.modules, {"psycopg": fake_driver, "psycopg.rows": fake_rows}):
+            initialize_database("postgresql://user:password@db.example.test/chat")
+
+        self.assertEqual(fake_connection.execute.call_count, len(database.POSTGRES_SCHEMA))
+        self.assertIn("ON DELETE CASCADE", " ".join(call.args[0] for call in fake_connection.execute.call_args_list))
+        fake_connection.commit.assert_called_once_with()
+        fake_connection.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

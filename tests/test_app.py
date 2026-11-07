@@ -147,6 +147,22 @@ class AppTests(unittest.TestCase):
         self.assertIn("Persistent Disk", readme)
         self.assertIn("ephemeral filesystem", readme)
 
+    def test_postgres_url_takes_precedence_over_sqlite_path(self):
+        postgres_url = "postgresql://db-user:secret@db.example.test:5432/chat?sslmode=require"
+        with patch("app.initialize_database") as initialize, patch("app.list_conversations", return_value=[]) as listing:
+            postgres_app = create_app({
+                "TESTING": True,
+                "SECRET_KEY": "postgres-test-secret",
+                "DATABASE_URL": postgres_url,
+                "DATABASE_PATH": self.db_path,
+                "RATE_LIMIT": "100 per hour",
+                "SESSION_COOKIE_SECURE": False,
+            })
+            response = postgres_app.test_client().get("/api/conversations")
+        self.assertEqual(response.status_code, 200)
+        initialize.assert_called_once_with(postgres_url)
+        listing.assert_called_once_with(postgres_url, "")
+
 
 if __name__ == "__main__":
     unittest.main()
