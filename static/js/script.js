@@ -37,7 +37,13 @@
     }
     let payload;
     try { payload = await response.json(); }
-    catch { payload = { success: false, error: "The server returned an invalid response." }; }
+    catch {
+      const status = response.status ? ` (HTTP ${response.status})` : "";
+      payload = {
+        success: false,
+        error: `The server returned an unexpected response${status}. Please try again shortly.`,
+      };
+    }
     if (!response.ok || !payload.success) {
       const error = new Error(payload.error || "The request could not be completed.");
       error.payload = payload;
@@ -313,6 +319,14 @@
     setBusy(true);
 
     try {
+      // Create the conversation before the slower provider call so the browser
+      // keeps its ID even if a proxy or network timeout interrupts the reply.
+      if (!activeConversationId) {
+        const created = await api("/api/conversations", { method: "POST", body: "{}" });
+        activeConversationId = created.conversation.id;
+        activeConversationHasMessages = false;
+        document.querySelector("#active-title").textContent = "New chat";
+      }
       const data = await api("/api/chat", {
         method: "POST",
         body: JSON.stringify({ conversation_id: activeConversationId, message }),

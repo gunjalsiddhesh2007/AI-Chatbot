@@ -33,6 +33,15 @@ def _max_output_tokens():
     return min(max(value, 1), 8192)
 
 
+def _provider_timeout_seconds():
+    """Keep provider requests bounded so Gunicorn can return a safe JSON error."""
+    try:
+        value = int(os.getenv("AI_PROVIDER_TIMEOUT_SECONDS", "20"))
+    except (TypeError, ValueError):
+        value = 20
+    return min(max(value, 1), 25)
+
+
 def _gemini_response(api_key, message, history):
     from google import genai
     from google.genai import types
@@ -48,7 +57,13 @@ def _gemini_response(api_key, message, history):
         types.Content(role="user", parts=[types.Part.from_text(text=message)])
     )
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=_provider_timeout_seconds() * 1000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
     try:
         response = client.models.generate_content(
             model=model,
@@ -75,15 +90,22 @@ def _groq_response(api_key, message, history):
         for turn in (history or [])
     )
     messages.append({"role": "user", "content": message})
-    client = Groq(api_key=api_key)
-    response = client.chat.completions.create(
-        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b",
-        messages=messages,
+    client = Groq(
+        api_key=api_key,
+        timeout=float(_provider_timeout_seconds()),
+        max_retries=0,
     )
-    answer = (response.choices[0].message.content or "").strip()
-    if not answer:
-        raise AIServiceError("The AI provider returned an empty response. Please try again.")
-    return answer
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b",
+            messages=messages,
+        )
+        answer = (response.choices[0].message.content or "").strip()
+        if not answer:
+            raise AIServiceError("The AI provider returned an empty response. Please try again.")
+        return answer
+    finally:
+        client.close()
 
 
 def _safe_provider_error(exc, provider):

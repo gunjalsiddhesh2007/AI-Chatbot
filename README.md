@@ -29,6 +29,7 @@ A small Flask chatbot with Gemini responses, persistent conversation history, an
 | `CONTEXT_MAX_CHARS` | `24000` | Approximate input-size guard for previous messages |
 | `GROQ_API_KEY`, `GROQ_API_KEY_2` | — | Fallback keys tried in order if Gemini is unavailable |
 | `GROQ_MODEL` | `openai/gpt-oss-120b` | Groq fallback model |
+| `AI_PROVIDER_TIMEOUT_SECONDS` | `20` | Provider request deadline in seconds (clamped to 1–25 seconds); Gemini falls back to Groq when its request times out |
 
 Copy `.env.example` for local development. `.env`, SQLite files, and PostgreSQL credentials are not committed. Do not put secrets in source files or commit a filled `.env`.
 
@@ -56,7 +57,7 @@ To keep SQLite, attach a Render Persistent Disk to a paid web service, mount it 
 ### Service commands
 
 - Build command: `pip install -r requirements.txt`
-- Start command: `gunicorn app:app --bind 0.0.0.0:$PORT` (also in `Procfile`)
+- Start command: `gunicorn app:app --bind 0.0.0.0:$PORT --timeout 90 --graceful-timeout 30` (also in `Procfile`). AI provider requests have their own shorter deadlines so slow providers return a controlled JSON error instead of a worker timeout page.
 - Health check: `GET /health`
 
 Render sets `RENDER=true`, so the app marks its session cookie secure automatically. For multiple app instances, configure `RATELIMIT_STORAGE_URI` with shared Redis so rate limits are consistent.

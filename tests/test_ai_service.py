@@ -1,8 +1,10 @@
 import os
+import sys
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from utils.ai_service import AIServiceError, generate_response
+from utils.ai_service import AIServiceError, _groq_response, generate_response
 
 
 class AIServiceTests(unittest.TestCase):
@@ -23,13 +25,42 @@ class AIServiceTests(unittest.TestCase):
                     {"role": "assistant", "content": "A programming language."},
                 ])
         self.assertEqual(response, "## Markdown answer")
-        make_client.assert_called_once_with(api_key="test-gemini-key")
+        make_client.assert_called_once()
+        options = make_client.call_args.kwargs["http_options"]
+        self.assertEqual(options.timeout, 20_000)
+        self.assertEqual(options.retry_options.attempts, 1)
         call = client.models.generate_content.call_args.kwargs
         self.assertEqual([item.role for item in call["contents"]], ["user", "model", "user"])
         self.assertEqual([item.parts[0].text for item in call["contents"]], [
             "What is Python?", "A programming language.", "Who created it?"
         ])
         self.assertIn("Markdown", call["config"].system_instruction)
+        client.close.assert_called_once_with()
+
+    def test_provider_timeout_setting_is_bounded(self):
+        with patch.dict(os.environ, {"AI_PROVIDER_TIMEOUT_SECONDS": "200"}):
+            client = Mock()
+            client.models.generate_content.return_value.text = "bounded"
+            with patch("google.genai.Client", return_value=client) as make_client:
+                with patch.dict(os.environ, {"GEMINI_API_KEY": "test-gemini-key", "GROQ_API_KEY": ""}):
+                    self.assertEqual(generate_response("hello", []), "bounded")
+            self.assertEqual(make_client.call_args.kwargs["http_options"].timeout, 25_000)
+
+    def test_groq_timeout_is_bounded_and_client_retries_are_disabled(self):
+        client = Mock()
+        client.chat.completions.create.return_value.choices = [
+            SimpleNamespace(message=SimpleNamespace(content="Groq reply"))
+        ]
+        groq_constructor = Mock(return_value=client)
+        fake_groq = SimpleNamespace(Groq=groq_constructor)
+        with patch.dict(sys.modules, {"groq": fake_groq}), patch.dict(
+            os.environ, {"AI_PROVIDER_TIMEOUT_SECONDS": "20"}
+        ):
+            answer = _groq_response("test-groq-key", "hello", [])
+        self.assertEqual(answer, "Groq reply")
+        groq_constructor.assert_called_once_with(
+            api_key="test-groq-key", timeout=20.0, max_retries=0
+        )
         client.close.assert_called_once_with()
 
     @patch("utils.ai_service._groq_response", return_value="Legacy reply")

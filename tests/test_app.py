@@ -137,6 +137,10 @@ class AppTests(unittest.TestCase):
         self.assertIn("dompurify@", html.lower())
         self.assertIn("max-width: 700px", css)
         self.assertIn("prefers-reduced-motion", css)
+        self.assertIn("HTTP ${response.status}", script)
+        create_first_conversation = script.index('const created = await api("/api/conversations"')
+        send_chat_request = script.index('const data = await api("/api/chat"')
+        self.assertLess(create_first_conversation, send_chat_request)
 
     def test_render_startup_and_persistent_disk_instructions_are_present(self):
         root = Path(__file__).resolve().parents[1]
