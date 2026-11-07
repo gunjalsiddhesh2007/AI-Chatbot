@@ -1,4 +1,4 @@
-"""Provider integration. Gemini is primary; Groq remains as a legacy fallback."""
+"""Provider integration with Gemini first and automatic Groq failover."""
 
 import os
 
@@ -33,6 +33,15 @@ def _max_output_tokens():
     return min(max(value, 1), 8192)
 
 
+def _provider_timeout_seconds():
+    """Keep provider requests bounded so Gunicorn can return a safe JSON error."""
+    try:
+        value = int(os.getenv("AI_PROVIDER_TIMEOUT_SECONDS", "20"))
+    except (TypeError, ValueError):
+        value = 20
+    return min(max(value, 1), 25)
+
+
 def _gemini_response(api_key, message, history):
     from google import genai
     from google.genai import types
@@ -48,7 +57,13 @@ def _gemini_response(api_key, message, history):
         types.Content(role="user", parts=[types.Part.from_text(text=message)])
     )
 
-    client = genai.Client(api_key=api_key)
+    client = genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(
+            timeout=_provider_timeout_seconds() * 1000,
+            retry_options=types.HttpRetryOptions(attempts=1),
+        ),
+    )
     try:
         response = client.models.generate_content(
             model=model,
@@ -75,15 +90,22 @@ def _groq_response(api_key, message, history):
         for turn in (history or [])
     )
     messages.append({"role": "user", "content": message})
-    client = Groq(api_key=api_key)
-    response = client.chat.completions.create(
-        model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b",
-        messages=messages,
+    client = Groq(
+        api_key=api_key,
+        timeout=float(_provider_timeout_seconds()),
+        max_retries=0,
     )
-    answer = (response.choices[0].message.content or "").strip()
-    if not answer:
-        raise AIServiceError("The AI provider returned an empty response. Please try again.")
-    return answer
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b").strip() or "openai/gpt-oss-120b",
+            messages=messages,
+        )
+        answer = (response.choices[0].message.content or "").strip()
+        if not answer:
+            raise AIServiceError("The AI provider returned an empty response. Please try again.")
+        return answer
+    finally:
+        client.close()
 
 
 def _safe_provider_error(exc, provider):
@@ -96,34 +118,52 @@ def _safe_provider_error(exc, provider):
     return AIServiceError(f"{provider} is temporarily unavailable. Please try again shortly.")
 
 
-def generate_response(message, history=None):
-    """Generate a reply from persisted conversation context plus the latest message."""
-    gemini_key = _configured_key("GEMINI_API_KEY")
-    if gemini_key:
-        try:
-            return _gemini_response(gemini_key, message, history or [])
-        except AIServiceError:
-            raise
-        except Exception as exc:
-            raise _safe_provider_error(exc, "Gemini") from None
-
-    # Keep Phase 1 deployments functional while they migrate from the existing Groq setup.
-    groq_keys = []
+def _groq_keys():
+    keys = []
     for name in ("GROQ_API_KEY", "GROQ_API_KEY_2"):
         key = _configured_key(name)
-        if key and key not in groq_keys:
-            groq_keys.append(key)
-    if not groq_keys:
-        raise AIServiceError("Gemini is not configured yet. Add GEMINI_API_KEY to the server environment.")
+        if key and key not in keys:
+            keys.append(key)
+    return keys
 
+
+def _generate_with_groq(keys, message, history):
     last_error = None
-    for key in groq_keys:
+    for key in keys:
         try:
-            return _groq_response(key, message, history or [])
+            return _groq_response(key, message, history)
         except AIServiceError as exc:
             last_error = exc
         except Exception as exc:
             last_error = exc
+
     if isinstance(last_error, AIServiceError):
         raise last_error
-    raise _safe_provider_error(last_error, "The AI provider") from None
+    raise _safe_provider_error(last_error, "Groq") from None
+
+
+def generate_response(message, history=None):
+    """Generate a reply from persisted conversation context plus the latest message."""
+    history = history or []
+    gemini_key = _configured_key("GEMINI_API_KEY")
+    gemini_error = None
+    if gemini_key:
+        try:
+            return _gemini_response(gemini_key, message, history)
+        except AIServiceError as exc:
+            gemini_error = exc
+        except Exception as exc:
+            gemini_error = _safe_provider_error(exc, "Gemini")
+
+    groq_keys = _groq_keys()
+    if not groq_keys:
+        if gemini_error is not None:
+            raise gemini_error
+        raise AIServiceError("Gemini is not configured yet. Add GEMINI_API_KEY to the server environment.")
+
+    try:
+        return _generate_with_groq(groq_keys, message, history)
+    except AIServiceError as groq_error:
+        if gemini_error is None:
+            raise
+        raise AIServiceError(f"Gemini failed and Groq fallback also failed: {groq_error}") from None

@@ -37,7 +37,13 @@
     }
     let payload;
     try { payload = await response.json(); }
-    catch { payload = { success: false, error: "The server returned an invalid response." }; }
+    catch {
+      const status = response.status ? ` (HTTP ${response.status})` : "";
+      payload = {
+        success: false,
+        error: `The server returned an unexpected response${status}. Please try again shortly.`,
+      };
+    }
     if (!response.ok || !payload.success) {
       const error = new Error(payload.error || "The request could not be completed.");
       error.payload = payload;
@@ -64,8 +70,16 @@
     const subtitle = document.createElement("p");
     subtitle.textContent = "Ask a question, explore an idea, or get help with a task.";
     welcome.append(icon, heading, subtitle);
+    const template = document.querySelector("#suggestion-cards-template");
+    if (template) welcome.append(template.content.cloneNode(true));
     messages.append(welcome);
     scrollToLatest();
+  }
+
+  const initialWelcome = document.querySelector("#welcome");
+  const suggestionTemplate = document.querySelector("#suggestion-cards-template");
+  if (initialWelcome && suggestionTemplate) {
+    initialWelcome.append(suggestionTemplate.content.cloneNode(true));
   }
 
   function addUserMessage(text) {
@@ -313,6 +327,14 @@
     setBusy(true);
 
     try {
+      // Create the conversation before the slower provider call so the browser
+      // keeps its ID even if a proxy or network timeout interrupts the reply.
+      if (!activeConversationId) {
+        const created = await api("/api/conversations", { method: "POST", body: "{}" });
+        activeConversationId = created.conversation.id;
+        activeConversationHasMessages = false;
+        document.querySelector("#active-title").textContent = "New chat";
+      }
       const data = await api("/api/chat", {
         method: "POST",
         body: JSON.stringify({ conversation_id: activeConversationId, message }),
@@ -349,6 +371,13 @@
     }
   });
   form.addEventListener("submit", sendMessage);
+  messages.addEventListener("click", (event) => {
+    const card = event.target.closest(".suggestion-card");
+    if (!card || busy) return;
+    input.value = card.dataset.prompt || "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    form.requestSubmit();
+  });
   document.querySelector("#new-chat-button").addEventListener("click", startNewChat);
   document.querySelector("#new-chat-inline").addEventListener("click", startNewChat);
   document.querySelector("#conversation-search").addEventListener("input", renderConversationList);
