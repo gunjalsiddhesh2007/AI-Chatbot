@@ -70,8 +70,16 @@
     const subtitle = document.createElement("p");
     subtitle.textContent = "Ask a question, explore an idea, or get help with a task.";
     welcome.append(icon, heading, subtitle);
+    const template = document.querySelector("#suggestion-cards-template");
+    if (template) welcome.append(template.content.cloneNode(true));
     messages.append(welcome);
     scrollToLatest();
+  }
+
+  const initialWelcome = document.querySelector("#welcome");
+  const suggestionTemplate = document.querySelector("#suggestion-cards-template");
+  if (initialWelcome && suggestionTemplate) {
+    initialWelcome.append(suggestionTemplate.content.cloneNode(true));
   }
 
   function addUserMessage(text) {
@@ -363,6 +371,13 @@
     }
   });
   form.addEventListener("submit", sendMessage);
+  messages.addEventListener("click", (event) => {
+    const card = event.target.closest(".suggestion-card");
+    if (!card || busy) return;
+    input.value = card.dataset.prompt || "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    form.requestSubmit();
+  });
   document.querySelector("#new-chat-button").addEventListener("click", startNewChat);
   document.querySelector("#new-chat-inline").addEventListener("click", startNewChat);
   document.querySelector("#conversation-search").addEventListener("input", renderConversationList);
